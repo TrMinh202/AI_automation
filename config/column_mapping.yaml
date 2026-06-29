@@ -1,0 +1,24 @@
+# Mapping giua ten cot thuc te trong file Excel testcase cu va field chuan he thong dung.
+# Sua file nay khi co file Excel mau thuc te, KHONG sua code excel_loader.py.
+sheet_name: null          # null = sheet dau tien/active, hoac ghi ten sheet cu the
+header_row: 0             # dong (0-indexed) chua header
+
+columns:
+  feature: "Feature"
+  trigger: "Trigger"
+  vehicle_status: "Vehicle Status"
+  domain: "Domain"
+  title: "Test Case Title"
+  preconditions: "Preconditions"
+  steps_action: "Test Steps"
+  steps_expected: "Expected Result"
+  final_expected_result: "Overall Expected Result"
+
+# Cac cot bat buoc phai co gia tri, neu thieu thi bo qua dong (chi warning, khong crash toan bo ingestion)
+required_fields:
+  - feature
+  - trigger
+  - domain
+
+# Ky tu phan tach cho cac cell chua nhieu gia tri (vi du nhieu precondition / nhieu step tren 1 cell)
+list_delimiter: "\n"
