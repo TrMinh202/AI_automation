@@ -1,113 +1,237 @@
 # Automotive Test Case Generator
 
-Hệ thống sinh test case ô tô từ requirement tự nhiên, kết hợp RAG (testcase cũ trong Qdrant), Coverage Engine + Gap Detector, Rule Engine theo domain, và Gemini (chỉ dùng để parse requirement và viết lại câu chữ — không sinh logic test).
+Tự động sinh test case ô tô từ requirement, kết hợp:
+- **RAG** — tìm testcase cũ tương tự trong Qdrant
+- **Coverage Engine** — chấm điểm độ phủ (cosine similarity + field match)
+- **Rule Engine** — sinh skeleton theo domain (Body Control, ADAS, Climate Control, Powertrain...)
+- **Gemini** — chỉ dùng để: decompose requirement → scenarios, parse requirement → structured JSON, và viết lại câu chữ tiếng Anh (không sinh logic test)
 
-## Kiến trúc
+## Pipeline
 
 ```
-Requirement (text) -> parse_requirement (Gemini) -> embed_requirement -> retrieve_candidates (Qdrant)
-  -> score_coverage (Coverage Engine + Gap Detector)
-      > 90%        -> reuse_high_match     (lấy testcase cũ, chỉ patch điều kiện thiếu)
-      50% - 90%     -> merge_partial_match  (base RAG + delta từ Rule Engine, merge)
-      < 50%         -> generate_from_rules  (chỉ Rule Engine sinh skeleton theo domain)
-  -> llm_refine (Gemini chỉ viết lại câu chữ, validate giữ nguyên cấu trúc)
-  -> finalize_output -> Test Case hoàn chỉnh
+Requirement (text)
+  └─► decompose_to_scenarios (Gemini) ──► [scenario 1, scenario 2, ...]
+                                              │  (chạy song song)
+                                              ▼
+                            parse_requirement (Gemini)
+                                              │
+                                              ▼
+                            embed_requirement (Gemini Embeddings)
+                                              │
+                                              ▼
+                            retrieve_candidates (Qdrant top-k)
+                                              │
+                                              ▼
+                            score_coverage (cosine + field match)
+                              │          │          │
+                           > 90%      50–90%      < 50%
+                              │          │          │
+                        reuse_high  merge_partial  generate
+                         _match      _match       _from_rules
+                              └──────────┴──────────┘
+                                              │
+                                              ▼
+                            llm_refine (Gemini — viết lại câu chữ)
+                                              │
+                                              ▼
+                            finalize_output → TestCase hoàn chỉnh
 ```
 
-Công thức coverage score: `combined_score = round(100 * (0.6 * cosine_similarity + 0.4 * field_match_score))`, với `field_match_score` là trung bình có trọng số giữa domain/feature/trigger/vehicle_status.
+**Coverage score:** `100 × (0.6 × cosine_similarity + 0.4 × field_match_score)`  
+**Classification:** `> 90` → High Match | `50–90` → Partial Match | `< 50` → New
 
 ## Cấu trúc thư mục
 
 ```
 app/
-  main.py              # FastAPI app
-  config.py            # Settings đọc từ .env
-  api/                 # routes.py, dependencies.py
-  schemas/             # StructuredRequirement, TestCase, CoverageScoreResult, PipelineState
-  clients/             # GeminiClient, QdrantClientWrapper
-  graph/               # LangGraph builder, routing, nodes/
-  rule_engine/         # base.py, registry.py, domains/ (body_control, adas, powertrain, _generic)
-  ingestion/           # excel_loader, build_payload, ingest.py (CLI)
-  utils/                # similarity.py (coverage scoring), text_rules.py
+  main.py                  # FastAPI app + lifespan
+  config.py                # Settings đọc từ .env
+  api/
+    routes.py              # POST /testcases/generate, /testcases/generate/export, GET /health
+    dependencies.py
+  schemas/                 # StructuredRequirement, TestCase, CoverageScoreResult, PipelineState
+  clients/
+    gemini_client.py       # GeminiClient (parse, decompose, refine, embed)
+    qdrant_client.py       # QdrantClientWrapper
+  graph/
+    builder.py             # LangGraph build_graph()
+    routing.py             # route_by_coverage
+    nodes/                 # parse, embed, retrieve, score, reuse, merge, generate, refine, finalize
+  rule_engine/
+    base.py                # DomainRuleSet ABC
+    registry.py            # Auto-scan & register domains
+    domains/               # body_control.py, adas.py, powertrain.py, _generic.py, _template.py
+  ingestion/
+    excel_loader.py
+    build_payload.py
+    column_mapping.py
+    ingest.py
+  utils/
+    similarity.py          # coverage scoring & classification
+    excel_exporter.py      # build_excel() → bytes
 config/
-  column_mapping.yaml  # mapping cột Excel thật -> field chuẩn (sửa file này khi đổi cấu trúc Excel)
-scripts/run_ingestion.py
+  column_mapping.yaml        # mapping cho VF34_update.xlsx
+  minio_column_mapping.yaml  # mapping cho Minio.xlsx
+outputs/                     # file Excel kết quả tự động lưu tại đây
+scripts/
+  run_ingestion.py
 tests/
 ```
+
+---
 
 ## 1. Cài đặt
 
 ```bash
-cd c:\Users\tminh\Workspace\dev_AI_automation
+# Clone project
+cd dev_AI_automation
+
+# Tạo virtual environment
 python -m venv .venv
+
+# Kích hoạt (Windows)
 .venv\Scripts\activate
+# Kích hoạt (Mac/Linux)
+source .venv/bin/activate
+
+# Cài dependencies
 pip install -r requirements.txt
 ```
 
+---
+
 ## 2. Cấu hình `.env`
 
-```bash
-copy .env.example .env
-```
+Tạo file `.env` ở thư mục gốc:
 
-Điền vào `.env`:
-
-```
-GOOGLE_API_KEY=<gemini api key>
-QDRANT_URL=<url cluster Qdrant Cloud>
-QDRANT_API_KEY=<api key Qdrant Cloud>
+```env
+GOOGLE_API_KEY=<Gemini API key của bạn>
+QDRANT_URL=<URL Qdrant Cloud cluster>
+QDRANT_API_KEY=<Qdrant API key>
 QDRANT_COLLECTION_NAME=historical_testcases
-GEMINI_CHAT_MODEL=gemini-2.0-flash
-GEMINI_EMBEDDING_MODEL=models/text-embedding-004
-EMBEDDING_DIM=768
+GEMINI_CHAT_MODEL=gemini-2.5-flash
+GEMINI_EMBEDDING_MODEL=models/gemini-embedding-001
+EMBEDDING_DIM=3072
 ```
 
-## 3. Chạy test
+> Lấy Gemini API key tại [Google AI Studio](https://aistudio.google.com).  
+> Lấy Qdrant URL + API key tại [Qdrant Cloud](https://cloud.qdrant.io).
 
-Không cần API key (chỉ test schema, rule engine, coverage scoring, routing — thuần Python):
+---
+
+## 3. Chạy tests
+
+Không cần API key (test schema, rule engine, coverage scoring, routing — thuần Python):
 
 ```bash
 pytest tests/ -v
 ```
 
+---
+
 ## 4. Ingest testcase cũ (Excel) vào Qdrant
 
-1. Đặt file Excel vào `data/` (ví dụ `data/historical_testcases.xlsx`).
-2. Sửa `config/column_mapping.yaml`, đổi giá trị bên phải mỗi dòng trong `columns:` khớp với tên cột thật trong file Excel của bạn (KHÔNG cần sửa code).
-3. Chạy:
+Đặt file Excel vào `data/`, sau đó chạy script ingest:
 
 ```bash
-python scripts/run_ingestion.py data/historical_testcases.xlsx
+# VF34
+python scripts/run_ingestion.py data/VF34_update.xlsx config/column_mapping.yaml
+
+# Minio
+python scripts/run_ingestion.py data/Minio.xlsx config/minio_column_mapping.yaml
 ```
 
-Script sẽ tự tạo collection trên Qdrant (nếu chưa có), embed từng dòng bằng Gemini, và upsert vào Qdrant (idempotent — chạy lại không tạo trùng).
+Script tự tạo collection (nếu chưa có), embed từng row bằng Gemini, upsert vào Qdrant (idempotent — chạy lại không tạo trùng).
+
+**Dùng file Excel khác:** copy một trong hai file `.yaml` trên, sửa giá trị bên phải mỗi dòng trong `columns:` cho khớp tên cột thật, rồi truyền `--mapping path/to/your_mapping.yaml` vào lệnh.
+
+---
 
 ## 5. Chạy server
 
 ```bash
-uvicorn app.main:app --reload
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-Server chạy tại `http://127.0.0.1:8000`, Swagger UI tại `http://127.0.0.1:8000/docs`.
+- Server: `http://localhost:8000`
+- Swagger UI: `http://localhost:8000/docs`
+- `--reload` tự restart khi sửa code (chỉ dùng khi dev)
 
-## 6. Gọi thử API
+---
 
-Kiểm tra health (kiểm tra luôn kết nối Qdrant):
+## 6. Gọi API
+
+### Kiểm tra health
 
 ```bash
-curl http://127.0.0.1:8000/health
+curl http://localhost:8000/health
+# {"status":"ok","qdrant":true}
 ```
 
-Sinh test case từ requirement:
+### Sinh test case → JSON
 
 ```bash
-curl -X POST http://127.0.0.1:8000/testcases/generate ^
+curl -X POST http://localhost:8000/testcases/generate \
+  -H "Content-Type: application/json" \
+  -d '{"requirement_text": "mô tả requirement ở đây"}'
+```
+
+Response:
+```json
+{
+  "testcases": [
+    {
+      "scenario_text": "...",
+      "testcase": { "testcase_id": "TC-...", "title": "...", "steps": [...], ... },
+      "coverage": { "final_score": 47.5, "classification": "New", ... }
+    }
+  ],
+  "total_count": 5
+}
+```
+
+### Sinh test case → Download Excel
+
+```bash
+curl -X POST http://localhost:8000/testcases/generate/export \
+  -H "Content-Type: application/json" \
+  -d '{"requirement_text": "mô tả requirement ở đây"}' \
+  --output outputs/result.xlsx
+```
+
+File Excel cũng tự động lưu vào `outputs/testcases_YYYYMMDD_HHMMSS.xlsx` phía server.
+
+### Windows (Command Prompt)
+
+```cmd
+curl -X POST http://localhost:8000/testcases/generate/export ^
   -H "Content-Type: application/json" ^
-  -d "{\"requirement_text\": \"Khi toc do xe vuot 30km/h va cua xe dang mo, he thong phai keu chuong canh bao\"}"
+  -d "{\"requirement_text\": \"your requirement here\"}" ^
+  --output outputs/result.xlsx
 ```
 
-Response trả về `testcase` (test case hoàn chỉnh) và `coverage` (điểm số + testcase cũ gần nhất nếu có, để truy vết).
+---
 
-## Thêm domain mới cho Rule Engine
+## 7. Thêm domain mới cho Rule Engine
 
-Copy `app/rule_engine/domains/_template.py` sang file mới (tên không bắt đầu bằng `_`, ví dụ `infotainment.py`), implement `generate_skeleton()`. `registry.py` tự động quét và đăng ký domain mới — không cần sửa code engine.
+1. Copy `app/rule_engine/domains/_template.py` sang file mới, ví dụ `infotainment.py`
+2. Implement `generate_skeleton()` theo domain
+3. `registry.py` tự động quét và đăng ký — không cần sửa thêm gì
+
+---
+
+## Cột Excel output
+
+| Cột | Mô tả |
+|---|---|
+| TC ID | ID duy nhất của test case |
+| Title | Tiêu đề test case |
+| Domain | Functional domain (Climate Control, Body Control, ...) |
+| Generation Path | `reuse` / `merge` / `rule_only` |
+| Coverage Score | 0–100 |
+| Classification | `High Match` / `Partial Match` / `New` |
+| Best Match TC | TC cũ gần nhất (nếu có) |
+| Scenario | Scenario input được decompose từ requirement |
+| Preconditions | Điều kiện tiên quyết |
+| Step No. / Action / Expected Result | Các bước test |
+| Final Expected Result | Kết quả mong đợi tổng thể |
