@@ -1,15 +1,19 @@
 import hashlib
 import json
+import re
 import uuid
 
 import pandas as pd
 from qdrant_client.http.models import PointStruct
 
 
-def parse_list_cell(cell_value, delimiter: str) -> list[str]:
+def parse_list_cell(cell_value, delimiter: str, regex_pattern: str | None = None) -> list[str]:
     if cell_value is None or (isinstance(cell_value, float) and pd.isna(cell_value)):
         return []
-    return [part.strip() for part in str(cell_value).split(delimiter) if part.strip()]
+    text = str(cell_value)
+    if regex_pattern:
+        return [part.strip() for part in re.split(regex_pattern, text) if part.strip()]
+    return [part.strip() for part in text.split(delimiter) if part.strip()]
 
 
 def build_steps(actions: list[str], expecteds: list[str]) -> list[dict]:
@@ -24,16 +28,16 @@ def build_steps(actions: list[str], expecteds: list[str]) -> list[dict]:
 
 def build_embedding_text(row: dict) -> str:
     steps_text = " ".join(f"{s['action']} {s['expected_result']}" for s in row.get("steps", []))
-    return " | ".join(
-        [
-            str(row.get("feature", "")),
-            str(row.get("trigger", "")),
-            str(row.get("vehicle_status", "")),
-            str(row.get("domain", "")),
-            str(row.get("title", "")),
-            steps_text,
-        ]
-    )
+    parts = [
+        str(row.get("feature", "")),
+        str(row.get("trigger", "")),
+        str(row.get("vehicle_status", "")),
+        str(row.get("domain", "")),
+        str(row.get("title", "")),
+        str(row.get("final_expected_result", "")),
+        steps_text,
+    ]
+    return " | ".join(p for p in parts if p and p != "nan")
 
 
 def stable_point_id(source_file: str, row_index: int) -> str:

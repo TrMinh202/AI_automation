@@ -1,0 +1,26 @@
+# Mapping ten cot Excel -> field chuan he thong.
+# File nay dung cho Minio.xlsx (sheet "Test case", header row 1 vi row 0 la filter setup).
+# Cot Domain trong file nay ten la "Funtion" (typo trong Excel goc, giu nguyen).
+sheet_name: "Test case"
+header_row: 1
+
+columns:
+  feature: "Functional Requirement Category"
+  trigger: "Power State"
+  vehicle_status: "Vehicle Status"
+  domain: "Funtion"
+  title: "Name"
+  preconditions: "Pre-Action"
+  steps_action: "Test Steps.Action"
+  steps_expected: "Test Steps.Expected result"
+  final_expected_result: "Test Purpose"
+
+# Chi bo qua dong neu thieu ca hai truong nay.
+required_fields:
+  - domain
+  - title
+
+list_delimiter: "\n"
+
+# Regex de split steps theo boundary so buoc (giu CAN signal trong cung buoc).
+step_split_regex: "\\n(?=\\d+\\.)"

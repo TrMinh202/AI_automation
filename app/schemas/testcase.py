@@ -18,11 +18,23 @@ class TestCase(BaseModel):
     final_expected_result: str
     source_requirement: str
     derived_from_testcase_id: Optional[str] = None
-    coverage_classification: Literal["Giống nhiều", "Giống một phần", "Mới hoàn toàn"]
+    coverage_classification: Literal["High Match", "Partial Match", "New"]
     coverage_score: float
     generation_path: Literal["reuse", "merge", "rule_only"]
 
 
+class TestCaseResult(BaseModel):
+    scenario_text: str
+    testcase: TestCase
+    coverage: "CoverageScoreResult"
+
+
+class GenerateTestCasesResponse(BaseModel):
+    testcases: list[TestCaseResult]
+    total_count: int
+
+
+# kept for backward-compat with any direct imports
 class GenerateTestCaseResponse(BaseModel):
     testcase: TestCase
     coverage: "CoverageScoreResult"
@@ -31,3 +43,5 @@ class GenerateTestCaseResponse(BaseModel):
 from app.schemas.coverage import CoverageScoreResult  # noqa: E402
 
 GenerateTestCaseResponse.model_rebuild()
+TestCaseResult.model_rebuild()
+GenerateTestCasesResponse.model_rebuild()

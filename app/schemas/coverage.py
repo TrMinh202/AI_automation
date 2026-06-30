@@ -15,4 +15,4 @@ class CoverageScoreResult(BaseModel):
     best_match: Optional[MatchedCandidate] = None
     top_k_matches: list[MatchedCandidate] = []
     final_score: float
-    classification: Literal["Giống nhiều", "Giống một phần", "Mới hoàn toàn"]
+    classification: Literal["High Match", "Partial Match", "New"]

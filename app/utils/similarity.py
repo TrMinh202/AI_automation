@@ -41,9 +41,9 @@ def combined_score(cosine_similarity: float, field_score: float) -> float:
     return round(100 * (0.6 * cos_sim + 0.4 * field), 2)
 
 
-def classify_score(score: float) -> Literal["Giống nhiều", "Giống một phần", "Mới hoàn toàn"]:
+def classify_score(score: float) -> Literal["High Match", "Partial Match", "New"]:
     if score > 90:
-        return "Giống nhiều"
+        return "High Match"
     if score >= 50:
-        return "Giống một phần"
-    return "Mới hoàn toàn"
+        return "Partial Match"
+    return "New"

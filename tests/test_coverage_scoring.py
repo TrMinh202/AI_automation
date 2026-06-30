@@ -45,9 +45,9 @@ def test_combined_score_formula():
 
 
 def test_classify_score_boundaries():
-    assert classify_score(95) == "Giống nhiều"
-    assert classify_score(90) == "Giống một phần"
-    assert classify_score(90.01) == "Giống nhiều"
-    assert classify_score(50) == "Giống một phần"
-    assert classify_score(49.99) == "Mới hoàn toàn"
-    assert classify_score(0) == "Mới hoàn toàn"
+    assert classify_score(95) == "High Match"
+    assert classify_score(90) == "Partial Match"
+    assert classify_score(90.01) == "High Match"
+    assert classify_score(50) == "Partial Match"
+    assert classify_score(49.99) == "New"
+    assert classify_score(0) == "New"

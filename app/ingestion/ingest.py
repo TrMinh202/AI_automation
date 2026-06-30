@@ -1,4 +1,5 @@
 import logging
+from itertools import zip_longest
 
 from app.clients.gemini_client import GeminiClient
 from app.clients.qdrant_client import QdrantClientWrapper
@@ -29,11 +30,15 @@ def main(file_path: str, mapping_path: str = "config/column_mapping.yaml", batch
         prepared_rows = []
         for row in batch:
             preconditions = parse_list_cell(row.get("preconditions"), mapping.list_delimiter)
-            steps_action = parse_list_cell(row.get("steps_action"), mapping.list_delimiter)
-            steps_expected = parse_list_cell(row.get("steps_expected"), mapping.list_delimiter)
+            steps_action = parse_list_cell(
+                row.get("steps_action"), mapping.list_delimiter, mapping.step_split_regex
+            )
+            steps_expected = parse_list_cell(
+                row.get("steps_expected"), mapping.list_delimiter, mapping.step_split_regex
+            )
             steps = [
-                {"action": a, "expected_result": e}
-                for a, e in zip(steps_action, steps_expected)
+                {"action": a or "", "expected_result": e or ""}
+                for a, e in zip_longest(steps_action, steps_expected)
             ]
             prepared_rows.append(
                 {

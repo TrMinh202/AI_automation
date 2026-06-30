@@ -7,3 +7,7 @@ def get_compiled_graph(request: Request):
 
 def get_qdrant_client(request: Request):
     return request.app.state.qdrant_client
+
+
+def get_gemini_client(request: Request):
+    return request.app.state.gemini_client

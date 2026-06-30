@@ -38,7 +38,7 @@ def merge_partial_match_node(state: PipelineState) -> dict:
     base_expected = str(base_payload.get("final_expected_result", "")).strip()
     rule_expected = skeleton["final_expected_result"].strip()
     if base_expected and rule_expected and _normalize(base_expected) != _normalize(rule_expected):
-        final_expected_result = f"{base_expected} Bo sung: {rule_expected}"
+        final_expected_result = f"{base_expected} Supplemented with: {rule_expected}"
     else:
         final_expected_result = base_expected or rule_expected
 

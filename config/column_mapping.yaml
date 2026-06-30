@@ -1,24 +1,28 @@
-# Mapping giua ten cot thuc te trong file Excel testcase cu va field chuan he thong dung.
-# Sua file nay khi co file Excel mau thuc te, KHONG sua code excel_loader.py.
-sheet_name: null          # null = sheet dau tien/active, hoac ghi ten sheet cu the
-header_row: 0             # dong (0-indexed) chua header
+# Mapping ten cot Excel -> field chuan he thong.
+# File nay dung cho VF34_update.xlsx (sheet Body_Testcases, header row 0).
+# Khi doi file Excel khac, copy file nay, sua gia tri ben phai va truyen --mapping vao lenh ingest.
+sheet_name: "Body_Testcases"
+header_row: 1
 
 columns:
-  feature: "Feature"
-  trigger: "Trigger"
+  feature: "Functional Requirement Category"
+  trigger: "Power State"
   vehicle_status: "Vehicle Status"
   domain: "Domain"
-  title: "Test Case Title"
-  preconditions: "Preconditions"
-  steps_action: "Test Steps"
-  steps_expected: "Expected Result"
-  final_expected_result: "Overall Expected Result"
+  title: "Name"
+  preconditions: "Pre-Action"
+  steps_action: "Test Steps.Action"
+  steps_expected: "Test Steps.Expected result"
+  final_expected_result: "Test Purpose"
 
-# Cac cot bat buoc phai co gia tri, neu thieu thi bo qua dong (chi warning, khong crash toan bo ingestion)
+# Chi bo qua dong neu thieu ca hai truong nay; cac truong khac co the rong.
 required_fields:
-  - feature
-  - trigger
   - domain
+  - title
 
-# Ky tu phan tach cho cac cell chua nhieu gia tri (vi du nhieu precondition / nhieu step tren 1 cell)
+# Ky tu phan tach precondition trong cung mot cell.
 list_delimiter: "\n"
+
+# Regex de split steps (action va expected) theo boundary so buoc "1." "2." "3."
+# Giu nguyen CAN signal detail lien ket voi buoc tuong ung.
+step_split_regex: "\\n(?=\\d+\\.)"

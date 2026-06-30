@@ -30,7 +30,7 @@ def test_testcase_valid():
         steps=[TestStep(step_number=1, action="Mo cua", expected_result="Canh bao")],
         final_expected_result="He thong canh bao dung",
         source_requirement="raw text",
-        coverage_classification="Mới hoàn toàn",
+        coverage_classification="New",
         coverage_score=10.0,
         generation_path="rule_only",
     )

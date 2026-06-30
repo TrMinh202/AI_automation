@@ -32,5 +32,5 @@ class DomainRuleSet(ABC):
         ):
             tokens = [t for t in value.lower().split() if len(t) > 2]
             if tokens and not any(t in existing_text for t in tokens):
-                missing.append(f"Bo sung dieu kien tu requirement moi ({label}): {value}")
+                missing.append(f"Additional condition from new requirement ({label}): {value}")
         return missing

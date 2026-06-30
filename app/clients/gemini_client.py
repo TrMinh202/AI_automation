@@ -1,26 +1,42 @@
+from pydantic import BaseModel
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 
 from app.config import settings
 from app.schemas.requirement import StructuredRequirement
 from app.schemas.testcase import TestCase
 
-PARSE_SYSTEM_PROMPT = """Ban la mot bo phan tich requirement kiem thu o to.
-Nhiem vu DUY NHAT: doc requirement tu do nguoi dung nhap va chuyen thanh JSON co cau truc.
-KHONG tu sinh them logic test, KHONG suy dien dieu kien khong co trong requirement.
-- feature: ten chuc nang lien quan
-- trigger: dieu kien kich hoat (gop tat ca dieu kien dieu kien trong requirement)
-- vehicle_status: trang thai xe lien quan (vi du: dang chay, dung yen, cua mo...)
-- domain: mot tu/cum tu ngan chi mien chuc nang o to (vi du: Body Control, ADAS, Powertrain, Infotainment)
-- description: 1 cau tom tat ngan gon, chuan hoa lai requirement (giu nguyen y nghia)
+PARSE_SYSTEM_PROMPT = """You are an automotive test requirement analyst.
+Your ONLY task: read the user-provided requirement and convert it into structured JSON.
+Do NOT invent additional test logic or infer conditions not stated in the requirement.
+- feature: name of the related function/feature
+- trigger: activation condition (combine all triggering conditions from the requirement)
+- vehicle_status: relevant vehicle state (e.g. moving, stationary, door open...)
+- domain: a short word/phrase for the automotive functional domain (e.g. Body Control, ADAS, Powertrain, Climate Control)
+- description: one concise summary sentence that normalizes the requirement (preserve original meaning)
 """
 
-REFINE_SYSTEM_PROMPT = """Ban la bien tap vien testcase kiem thu o to.
-Nhiem vu DUY NHAT: viet lai cho ro rang, dung ngu phap cac truong action/expected_result cua tung step,
-va title/final_expected_result.
-TUYET DOI KHONG duoc: them/xoa/doi thu tu step, them/xoa precondition, doi testcase_id/domain/
+REFINE_SYSTEM_PROMPT = """You are an automotive test case editor.
+Your ONLY task: rewrite the action/expected_result fields of each step and the title/final_expected_result to be clear and grammatically correct English.
+STRICTLY FORBIDDEN: adding/removing/reordering steps, adding/removing preconditions, changing testcase_id/domain/
 derived_from_testcase_id/coverage_classification/coverage_score/generation_path/source_requirement.
-Giu nguyen so luong step va step_number nhu input.
+Keep the same number of steps and step_number values as the input.
+All output text must be in English.
 """
+
+DECOMPOSE_SYSTEM_PROMPT = """You are an expert test requirement analyst for automotive control systems (CCU/BCM/ADAS/Climate Control).
+Task: read the overall requirement and decompose it into 3-5 INDEPENDENT, concrete, immediately testable test scenarios.
+Each scenario describes EXACTLY ONE activation condition + ONE expected outcome.
+Mandatory rules:
+- Preserve original technical parameters (signal names, threshold values, units)
+- Each scenario must be self-contained (runnable without other scenarios)
+- Must cover: the main happy path, independent sub-functions, default/boundary states
+- Do NOT create duplicate scenarios or combine multiple functions into one scenario
+Return only JSON: {{"scenarios": ["<scenario 1 description in English>", "<scenario 2>", ...]}}
+"""
+
+
+class _ScenariosOutput(BaseModel):
+    scenarios: list[str]
 
 
 class GeminiClient:
@@ -49,8 +65,8 @@ class GeminiClient:
     def refine_wording(self, draft_testcase: TestCase, structured_requirement: StructuredRequirement) -> TestCase:
         structured_llm = self._chat.with_structured_output(TestCase)
         prompt = (
-            f"Requirement goc: {structured_requirement.raw_text}\n\n"
-            f"Testcase can vie lai cho ro rang hon (giu nguyen cau truc):\n"
+            f"Original requirement: {structured_requirement.raw_text}\n\n"
+            f"Test case to rewrite in clear English (preserve structure):\n"
             f"{draft_testcase.model_dump_json(indent=2)}"
         )
         return structured_llm.invoke(
@@ -59,6 +75,20 @@ class GeminiClient:
                 ("human", prompt),
             ]
         )
+
+    def decompose_to_scenarios(self, requirement: str) -> list[str]:
+        structured_llm = self._chat.with_structured_output(_ScenariosOutput)
+        try:
+            result = structured_llm.invoke(
+                [
+                    ("system", DECOMPOSE_SYSTEM_PROMPT),
+                    ("human", requirement),
+                ]
+            )
+            scenarios = [s.strip() for s in result.scenarios if s.strip()]
+            return scenarios if scenarios else [requirement]
+        except Exception:
+            return [requirement]
 
     def embed(self, text: str) -> list[float]:
         return self._embeddings.embed_query(text)

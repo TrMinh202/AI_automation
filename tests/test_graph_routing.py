@@ -8,7 +8,7 @@ def make_state(score: float):
             best_match=None,
             top_k_matches=[],
             final_score=score,
-            classification="Mới hoàn toàn",
+            classification="New",
         )
     }
 

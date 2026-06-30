@@ -21,15 +21,16 @@ class QdrantClientWrapper:
         self._client.upsert(collection_name=self.collection_name, points=points)
 
     def search(self, vector: list[float], limit: int = 5) -> list:
-        return self._client.search(
+        result = self._client.query_points(
             collection_name=self.collection_name,
-            query_vector=vector,
+            query=vector,
             limit=limit,
         )
+        return result.points
 
     def scroll(self, limit: int = 10) -> list:
-        points, _ = self._client.scroll(collection_name=self.collection_name, limit=limit)
-        return points
+        result, _ = self._client.scroll(collection_name=self.collection_name, limit=limit)
+        return result
 
     def is_healthy(self) -> bool:
         try:

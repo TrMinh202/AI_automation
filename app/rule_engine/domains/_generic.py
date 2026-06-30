@@ -8,14 +8,14 @@ class GenericRuleSet(DomainRuleSet):
 
     def generate_skeleton(self, req: StructuredRequirement) -> TestCaseSkeleton:
         return TestCaseSkeleton(
-            title=f"Kiem tra: {req.feature}",
-            preconditions=[f"He thong da khoi dong, trang thai xe: {req.vehicle_status}"],
+            title=f"Verify: {req.feature}",
+            preconditions=[f"System initialized, vehicle state: {req.vehicle_status}"],
             steps=[
                 TestStep(
                     step_number=1,
-                    action=f"Ap dung dieu kien kich hoat: {req.trigger}",
-                    expected_result=f"He thong phan hoi dung theo requirement: {req.description or req.raw_text}",
+                    action=f"Apply activation condition: {req.trigger}",
+                    expected_result=f"System responds correctly per requirement: {req.description or req.raw_text}",
                 )
             ],
-            final_expected_result=f"He thong hoat dong dung voi requirement: {req.description or req.raw_text}",
+            final_expected_result=f"System operates correctly per requirement: {req.description or req.raw_text}",
         )
