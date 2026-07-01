@@ -17,6 +17,19 @@ Do NOT invent additional test logic or infer conditions not stated in the requir
 
 REFINE_SYSTEM_PROMPT = """You are an automotive test case editor.
 Your ONLY task: rewrite the action/expected_result fields of each step and the title/final_expected_result to be clear and grammatically correct English.
+
+Rules for action field:
+- Write each action as a direct, concrete instruction starting with a verb (e.g. "Touch", "Set", "Press", "Turn", "Verify").
+- Be specific: include exact values, signal names, button names, or thresholds from the Technical Reference when available.
+- Do NOT start with "Step N:" — the step number is already tracked in step_number.
+- Example good action: "Press the front defrost button on the central control panel."
+- Example good action: "Set fan speed from 0 to level 3 using the virtual button."
+
+Rules for expected_result field:
+- State the observable outcome precisely (what is displayed, what signal changes, what actuator activates).
+- Use exact CAN signal names, threshold values, or mode names from the Technical Reference when available.
+- Example: "The MHU displays fan speed = 3 and wind output is audible."
+
 STRICTLY FORBIDDEN: adding/removing/reordering steps, adding/removing preconditions, changing testcase_id/domain/
 derived_from_testcase_id/coverage_classification/coverage_score/generation_path/source_requirement.
 Keep the same number of steps and step_number values as the input.
@@ -62,10 +75,22 @@ class GeminiClient:
         result.raw_text = raw_text
         return result
 
-    def refine_wording(self, draft_testcase: TestCase, structured_requirement: StructuredRequirement) -> TestCase:
+    def refine_wording(
+        self,
+        draft_testcase: TestCase,
+        structured_requirement: StructuredRequirement,
+        bcm_context: list[str] | None = None,
+    ) -> TestCase:
         structured_llm = self._chat.with_structured_output(TestCase)
+
+        bcm_section = ""
+        if bcm_context:
+            joined = "\n\n---\n\n".join(bcm_context)
+            bcm_section = f"\n\n=== Technical Reference (BCM/Spec) ===\n{joined}\n=== End Technical Reference ==="
+
         prompt = (
-            f"Original requirement: {structured_requirement.raw_text}\n\n"
+            f"Original requirement: {structured_requirement.raw_text}"
+            f"{bcm_section}\n\n"
             f"Test case to rewrite in clear English (preserve structure):\n"
             f"{draft_testcase.model_dump_json(indent=2)}"
         )

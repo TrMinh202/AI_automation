@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     qdrant_url: str
     qdrant_api_key: str
     qdrant_collection_name: str = "historical_testcases"
+    bcm_collection_name: str = "bcm_specs"
     gemini_chat_model: str = "gemini-2.0-flash"
     gemini_embedding_model: str = "models/text-embedding-004"
     embedding_dim: int = 768

@@ -5,9 +5,9 @@ from app.config import settings
 
 
 class QdrantClientWrapper:
-    def __init__(self) -> None:
+    def __init__(self, collection_name: str | None = None) -> None:
         self._client = _QdrantClient(url=settings.qdrant_url, api_key=settings.qdrant_api_key)
-        self.collection_name = settings.qdrant_collection_name
+        self.collection_name = collection_name or settings.qdrant_collection_name
 
     def ensure_collection(self) -> None:
         existing = {c.name for c in self._client.get_collections().collections}
@@ -16,6 +16,10 @@ class QdrantClientWrapper:
                 collection_name=self.collection_name,
                 vectors_config=VectorParams(size=settings.embedding_dim, distance=Distance.COSINE),
             )
+
+    def collection_exists(self) -> bool:
+        existing = {c.name for c in self._client.get_collections().collections}
+        return self.collection_name in existing
 
     def upsert(self, points: list[PointStruct]) -> None:
         self._client.upsert(collection_name=self.collection_name, points=points)

@@ -13,4 +13,7 @@ class PipelineState(TypedDict, total=False):
     coverage_result: Optional[CoverageScoreResult]
     draft_testcase: Optional[TestCase]
     final_testcase: Optional[TestCase]
+    # BCM/spec chunks retrieved from the bcm_specs Qdrant collection.
+    # Empty list when no BCM documents have been ingested yet.
+    bcm_context: list[str]
     errors: list[str]
